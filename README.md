@@ -20,7 +20,7 @@ Compare with the original code using the `upstream-d6a61db` tag:
 Only the Fortran is packaged. The `java/`, `js/`, `python/` and `archive/` folders are unchanged.
 
 ## Install
-You need Python 3.12 or newer, `gfortran` and a C compiler. Linux and WSL are supported; native
+You need Python 3.12 or newer, git, `gfortran` and a C compiler. Linux and WSL are supported; native
 Windows is not.
 ```bash
 pip install git+https://github.com/mbogden/JSPAM.git@simr-branch
