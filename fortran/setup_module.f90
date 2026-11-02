@@ -451,7 +451,6 @@ end subroutine perturber_position
     a2 = -mass2 * df_force2
     at = a1 + a2
 
-    write(24,*) r1, ival, df_force1, a1, rrout1
 
 
 ! df
@@ -461,7 +460,6 @@ end subroutine perturber_position
 
     xvalue = v1 / df_sigma
     c1 = erf(xvalue) - 2.0d0 * xvalue / SqrtPI * exp(-xvalue*xvalue)
-    write(21,*) r1, c1, xvalue, v1, df_sigma, df_rho
 
 
 ! df formula with G=1
