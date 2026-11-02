@@ -1,0 +1,82 @@
+! Calls SPAM from Python. Added for the SIMR project; not part of the original JSPAM.
+! Uses the original modules unchanged and sets up a run the same way basic_run does when it's given
+! a model string, without reading the command line or writing the particle output file.
+module simr_interface
+
+  use parameters_module
+  use init_module
+  use integrator
+
+  implicit none
+
+contains
+
+  subroutine run_collision(collision_param, potential, npts1, npts2, final_state)
+
+    real (kind=8), dimension(22), intent(in) :: collision_param
+    integer, intent(in) :: potential, npts1, npts2
+    real (kind=8), dimension(npts1+npts2+1,6), intent(out) :: final_state
+
+    integer (kind=4) :: nstep_local, i
+
+    call RANDOM_SEED()
+    call STANDARD_GALAXY1(mass1, epsilon1, rin1, rout1, rscale1, theta1, phi1, opt1, heat1)
+    call STANDARD_GALAXY2(mass2, epsilon2, rin2, rout2, rscale2, theta2, phi2, opt2, heat2)
+    call TEST_COLLISION(n, n1, n2, time, inclination_degree, omega_degree, &
+         rmin, velocity_factor, h, nstep, nout)
+
+    ! Same order as parse_state_info_string
+    sec_vec = collision_param(1:6)
+    mass1 = collision_param(7)
+    mass2 = collision_param(8)
+    rout1 = collision_param(9)
+    rout2 = collision_param(10)
+    phi1 = collision_param(11)
+    phi2 = collision_param(12)
+    theta1 = collision_param(13)
+    theta2 = collision_param(14)
+    epsilon1 = collision_param(15)
+    epsilon2 = collision_param(16)
+    rscale1 = collision_param(17:19)
+    rscale2 = collision_param(20:22)
+    use_sec_vec = .true.
+
+    ! Same values as custom_collision uses for a model string
+    potential_type = potential
+    h = hbase
+    tstart = -5
+    tend = 0
+    time = -5
+    tIsSet = .false.
+
+    n1 = npts1
+    n2 = npts2
+    n = n1 + n2
+    eps1 = epsilon1*epsilon1
+    eps2 = epsilon2*epsilon2
+
+    allocate(x0(n+1,6))
+    allocate(xout(n+1,6))
+    allocate(projected(n+1,3))
+
+    call CREATE_COLLISION
+    call INIT_RKVAR(x0, mass1, mass2, epsilon1, epsilon2, theta1, phi1, &
+         theta2, phi2, rscale1, rscale2, rout1, rout2, n, n1, n2)
+
+    nstep_local = int((tend - tstart) / h) + 2
+    do i = 1, nstep_local
+      call TAKE_A_STEP
+    enddo
+
+    final_state = x0
+
+    ! DEALLOCATE_RKVAR doesn't free these, which would stop a second run in the same process
+    deallocate(ival11, ival22, ivaln, df_force11, df_force22, df_forcen, c3n)
+    call DEALLOCATE_RKVAR
+    deallocate(x0)
+    deallocate(xout)
+    deallocate(projected)
+
+  end subroutine run_collision
+
+end module simr_interface
