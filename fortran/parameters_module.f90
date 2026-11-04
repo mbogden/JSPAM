@@ -34,6 +34,7 @@ module parameters_module
     
     real (kind=8), parameter :: hbase = 0.001d0
     integer(kind=4) :: potential_type = 0
+    real (kind=8) :: heat_offset = 0.0d0   ! SIMR: see profile in setup_module
 
     integer, parameter :: ndim = 3
     real (kind=8) :: mass1 

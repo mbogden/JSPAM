@@ -77,6 +77,7 @@ use df_module
 
   real (kind=8) :: xs_reprocess, ys_reprocess, xc_reprocess, yc_reprocess
   real (kind=8), dimension(6) :: original_rv
+  logical :: tstart_fallback = .false.   ! SIMR: true if the run was moved to start at t = -5
 
 
 !
@@ -135,11 +136,22 @@ end subroutine print_run
 subroutine create_collision
 
   implicit none
+
+  call INIT_DISTRIBUTION
+  call place_galaxies
+
+  return
+
+end subroutine create_collision
+
+!---------------------------------------------------------------------
+
+subroutine place_galaxies
+
+  implicit none
   real (kind=8), dimension(7) :: rv4min
   real (kind=8), dimension(4) :: tminVals
   real (kind=8) :: tmpT
-
-  call INIT_DISTRIBUTION
 
   ! create the disks
 !  call SET_DIFFQ2_PARAMETERS(phi1, theta1, phi2, theta2, rscale1, rscale2, rout1, rout2)
@@ -156,12 +168,15 @@ subroutine create_collision
 	tminVals = getTStart(rv4min, mass1, mass2, sqrt(eps1), sqrt(eps2) , h,-30.0d0 ,10.0d0*(rout1), rout1, rout2)
 		
 	tmpT = tminVals(1)
+	tstart_fallback = .false.
 	if ( tmpT < -12.0 ) then
 	  tmpT = -5
+	  tstart_fallback = .true.
 	endif
-		
+
 	if ( abs(tmpT) < h) then
 	  tmpT = -5
+	  tstart_fallback = .true.
 	endif
 		tstart = tmpT
                 time = tstart
@@ -183,7 +198,7 @@ subroutine create_collision
 
   return
 
-end subroutine create_collision
+end subroutine place_galaxies
 
 !---------------------------------------------------------------------
 

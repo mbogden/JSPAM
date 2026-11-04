@@ -714,9 +714,10 @@ end subroutine perturber_position
       x0(i,1) = x3 
       x0(i,2) = y3 
       x0(i,3) = z3 
-      x0(i,4) = xv3  + randm()*heat
-      x0(i,5) = yv3  + randm()*heat
-      x0(i,6) = zv3  + randm()*heat
+! SIMR: heat_offset 0 is Wallin's (always positive, so it adds a drift); 0.5 is the same spread, centered
+      x0(i,4) = xv3  + (randm() - heat_offset)*heat
+      x0(i,5) = yv3  + (randm() - heat_offset)*heat
+      x0(i,6) = zv3  + (randm() - heat_offset)*heat
 !    x0(6,i) = t0
 
     enddo

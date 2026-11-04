@@ -33,6 +33,10 @@ module df_module
     real (kind=8) :: pscale
 
     real (kind=8) :: lnl
+
+! SIMR: the mass model last built, so identical runs don't rebuild the tables
+    real (kind=8), dimension(6) :: built_mass_model = 0.0d0
+    integer (kind=4) :: built_normalization = -1
 !
 !     ----------------------------------------------------------------
 !
@@ -46,19 +50,55 @@ CONTAINS
 !     ----------------------------------------------------------------
 !
   subroutine init_distribution
-!     
 !
-!     -----Description: initializes the distribution 
+!     -----Description: Wallin's fixed mass model, used by the command-line programs
+!
+    implicit none
+    call init_mass_model(0.001d0, 10.0d0, 5.8d0, dble(0.3333), dble(0.2), 1.0d0, 0)
+  end subroutine init_distribution
+
+!
+!     ----------------------------------------------------------------
+!
+  subroutine init_mass_model_if_changed(lnl_in, rchalo_in, mhalo_in, mbulge_in, hbulge_in, hdisk_in, normalization)
+!
+!     -----Description: SIMR. Rebuilds the tables only if a value differs from the last build
+!
+    implicit none
+    real (kind=8), intent(in) :: lnl_in, rchalo_in, mhalo_in, mbulge_in, hbulge_in, hdisk_in
+    integer (kind=4), intent(in) :: normalization
+    real (kind=8), dimension(6) :: wanted
+
+    wanted = (/lnl_in, rchalo_in, mhalo_in, mbulge_in, hbulge_in, hdisk_in/)
+    if (normalization == built_normalization .and. all(wanted == built_mass_model)) return
+
+    call init_mass_model(lnl_in, rchalo_in, mhalo_in, mbulge_in, hbulge_in, hdisk_in, normalization)
+    built_mass_model = wanted
+    built_normalization = normalization
+  end subroutine init_mass_model_if_changed
+
+!
+!     ----------------------------------------------------------------
+!     ----------------------------------------------------------------
+!
+  subroutine init_mass_model(lnl_in, rchalo_in, mhalo_in, mbulge_in, hbulge_in, hdisk_in, normalization)
 !
 !
-!          on input:  
+!     -----Description: initializes the distribution
+!
+!
+!          on input:  the mass model; normalization 0 divides by Wallin's fixed 7.13333,
+!                     1 divides by this model's actual total mass
 !
 !          on output:
-!          
+!
 !
 !     ----------------------------------------------------------------
 !
     implicit none
+    real (kind=8), intent(in) :: lnl_in, rchalo_in, mhalo_in, mbulge_in, hbulge_in, hdisk_in
+    integer (kind=4), intent(in) :: normalization
+    real (kind=8) :: norm
 !
 !     -----Variable declarations
 !          ---------------------
@@ -91,15 +131,13 @@ CONTAINS
 
 !!!!!
 ! set the constant for dynamical friction
-    lnl = 0.00d0
-! default for Merger Zoo
-    lnl = 0.001d0
+    lnl = lnl_in
 
 !!!!!
 ! set up the parameters for the halo
-    mhalo = 5.8d0  
+    mhalo = mhalo_in
     rhalo = 10.0d0
-    rchalo = 10.0d0
+    rchalo = rchalo_in
     gammahalo = 1.0d0
     epsilon_halo = 0.4d0 
     SqrtPI = sqrt(pi)
@@ -136,13 +174,13 @@ CONTAINS
 ! set the fundamental disk parameters
     zdisk = 0.2
     zdiskmax = 3.5
-    hdisk = 1.0
+    hdisk = hdisk_in
     
 
 !!!!!
 ! set the fundamental bulge parameters
-    hbulge = 0.2
-    mbulge = 0.3333
+    hbulge = hbulge_in
+    mbulge = mbulge_in
     
     
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!3
@@ -432,25 +470,28 @@ end do
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! normalize to the unit mass
 
-do  j= 1, ntotal
-  mass_total(j)  = mass_total(j) / 7.13333d0
-  mass_halo(j)   = mass_halo(j)  / 7.13333d0
-  mass_disk(j)   = mass_disk(j)  / 7.13333d0
-  mass_bulge(j)  = mass_bulge(j) / 7.13333d0
-  new_mass(j)    = new_mass(j)   / 7.13333d0
+norm = 7.13333d0
+if (normalization == 1) norm = mass_total(nmax)
 
-  rho_total(j)   = rho_total(j)  / 7.13333d0
-  new_rho(j)     = new_rho(j)    / 7.13333d0
+do  j= 1, ntotal
+  mass_total(j)  = mass_total(j) / norm
+  mass_halo(j)   = mass_halo(j)  / norm
+  mass_disk(j)   = mass_disk(j)  / norm
+  mass_bulge(j)  = mass_bulge(j) / norm
+  new_mass(j)    = new_mass(j)   / norm
+
+  rho_total(j)   = rho_total(j)  / norm
+  new_rho(j)     = new_rho(j)    / norm
  
-  vr(j)          = vr(j)      / 7.13333d0
-  vr2(j)         = vr2(j)     / 7.13333d0
-  new_vr(j)      = new_vr(j)  / 7.13333d0
-  new_vr2(j)     = new_vr2(j) / 7.13333d0
+  vr(j)          = vr(j)      / norm
+  vr2(j)         = vr2(j)     / norm
+  new_vr(j)      = new_vr(j)  / norm
+  new_vr2(j)     = new_vr2(j) / norm
 
   rad(j)         = rad(j) 
 
-  acceleration_particle(j) = acceleration_particle(j) / 7.13333d0
-  acceleration(j)          = acceleration(j)  / 7.13333d0
+  acceleration_particle(j) = acceleration_particle(j) / norm
+  acceleration(j)          = acceleration(j)  / norm
 
 !!  write(11,*) rad(j), new_rho(j), new_mass(j),  new_vr(j)
 end do
@@ -474,7 +515,7 @@ pscale = 1.0d0
 
 
 
-  end subroutine init_distribution
+  end subroutine init_mass_model
 
 
 
@@ -511,7 +552,12 @@ pscale = 1.0d0
 
     
 !    ival = min(int(  (rin * rs_internal/ rmax_scale) * nnn + 1), nnn) 
-    ival = min(int(  (rin * pscale * rs_internal/ rmax_scale) * nnn + 1), nnn) 
+! SIMR: a NaN radius would convert to a wild index and crash the process. Let the NaN carry on instead.
+    if (rin /= rin) then
+      df_index = nnn
+      return
+    endif
+    ival = min(int(  (rin * pscale * rs_internal/ rmax_scale) * nnn + 1), nnn)
     df_index = ival
 
 !!    print*,rin, pscale, rs_internal, rmax_scale, nnn, 'dddd'
