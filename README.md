@@ -16,6 +16,13 @@ Compare with the original code using the `upstream-d6a61db` tag:
 - Added `fortran/simr_interface.f90`, which runs the original modules from Python.
 - Removed two debug `write` statements from `fortran/setup_module.f90`. They wrote about 80 MB of
   files per run and don't affect results.
+- `init_distribution` now calls a new `init_mass_model`, so the mass model can be set for each run.
+  The command-line programs still use the original fixed values.
+- Added two options, both defaulting to the original behavior: mass normalization by a model's
+  actual total, and heat with no drift.
+- `create_collision` is split in two, so a run can reuse mass tables that are already built, and it
+  records when a run's start time falls back to t = -5.
+- `df_index` no longer crashes the process on a NaN radius.
 
 Only the Fortran is packaged. The `java/`, `js/`, `python/` and `archive/` folders are unchanged.
 
@@ -38,12 +45,23 @@ model = (
 )
 params = np.array(model.split(","), dtype=float)
 
-final = jspam.run_collision(params, n1=1000, n2=1000)
-print(final.shape)  # (2001, 6): x, y, z, vx, vy, vz for each particle
-print(final[-1])  # the last row is the secondary galaxy's center
+snapshots, steps, times = jspam.run_particles(params, seed=1, n1=1000, n2=1000)
+print(snapshots.shape)  # (1, 2001, 6): one ending; x, y, z, vx, vy, vz for each particle
+print(snapshots[0, -1])  # the last row is the secondary galaxy's center
+
+# Save several endings from one integration. Step 0 is the initial state.
+timing = jspam.get_timing(params)
+snapshots, steps, times = jspam.run_particles(params, seed=1, end_steps=[0, timing.n_steps, timing.n_steps + 500])
+
+# The orbit alone: much faster, with no particles and no random numbers.
+orbit = jspam.run_orbit(params)  # x, y, z, vx, vy, vz, t at the start and after each step
+
+# Set the mass model. Every call passes it in full, so no call can inherit values from an earlier one.
+model = jspam.MassModel(lnl=0.01, m_halo=4.0, normalization="total")
+orbit = jspam.run_orbit(params, model)
 ```
-Disk particles start from unseeded random positions, so they differ between runs. The secondary
-galaxy's orbit doesn't.
+The same inputs and seed give identical numbers from the same build on the same machine. Other builds
+or CPUs can differ in the last digits.
 
 ## Tests
 ```bash
