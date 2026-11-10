@@ -16,6 +16,9 @@ Compare with the original code using the `upstream-d6a61db` tag:
 - Added `fortran/simr_interface.f90`, which runs the original modules from Python.
 - Removed two debug `write` statements from `fortran/setup_module.f90`. They wrote about 80 MB of
   files per run and don't affect results.
+- `profile` in `fortran/setup_module.f90` subtracts `heat_offset` (new, in `parameters_module.f90`)
+  from each heat kick. It's 0 by default, which gives the original results exactly; 0.5 centers the
+  kicks so heated disks don't drift.
 
 Only the Fortran is packaged. The `java/`, `js/`, `python/` and `archive/` folders are unchanged.
 
@@ -47,6 +50,8 @@ seed, they start from random positions that differ between runs, as in the origi
 galaxy's orbit has no random numbers, so it's the same either way.
 
 `heat1` and `heat2` add random motion to each disk's particles (0 by default, as in the original).
+With `heat_mode="wallin"` (the default) each velocity component gets a kick in [0, heat), which is
+always positive, so a heated disk drifts; `"centered"` gives kicks in [-heat/2, heat/2), with no drift.
 `jspam.initial_state` takes the same arguments and returns the particles at the start, before any step.
 
 ## Tests

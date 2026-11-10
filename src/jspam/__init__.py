@@ -8,6 +8,9 @@ N_PARAMS = 22
 POINT_MASS = 0
 EXTENDED = 1
 
+# How heat is added to the disk velocities. See run_collision.
+HEAT_MODES = {"wallin": 0, "centered": 1}
+
 
 def run_collision(
     params: np.ndarray,
@@ -17,6 +20,7 @@ def run_collision(
     seed: int | None = None,
     heat1: float = 0.0,
     heat2: float = 0.0,
+    heat_mode: str = "wallin",
 ) -> np.ndarray:
     """Run one collision and return the final state of every particle.
 
@@ -27,8 +31,11 @@ def run_collision(
         potential: POINT_MASS or EXTENDED (the halo/disk/bulge potential, NBI in the Fortran).
         seed: sets where the disk particles start. The same seed gives the same particles. None
             seeds from the operating system, so every run differs (the original behavior).
-        heat1, heat2: random motion added to each disk's particle velocities. SPAM adds a value
-            between 0 and heat to each of vx, vy and vz. The default, 0, is the original's.
+        heat1, heat2: random motion added to each disk's particle velocities. The default, 0, is
+            the original's.
+        heat_mode: "wallin" (the original) adds a value in [0, heat) to each of vx, vy and vz, which
+            is always positive, so a heated disk drifts toward +x, +y, +z. "centered" adds a value in
+            [-heat/2, heat/2): the same spread, with no drift.
 
     Returns:
         x, y, z, vx, vy, vz at the end of the run, shape (n1 + n2 + 1, 6). The last row is the
@@ -36,7 +43,7 @@ def run_collision(
     """
     params = _check_params(params)
     _seed(seed)
-    return simr_interface.run_collision(params, potential, n1, n2, heat1, heat2)
+    return simr_interface.run_collision(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
 
 def initial_state(
@@ -47,6 +54,7 @@ def initial_state(
     seed: int | None = None,
     heat1: float = 0.0,
     heat2: float = 0.0,
+    heat_mode: str = "wallin",
 ) -> np.ndarray:
     """Set up one collision and return every particle at the start, before any step.
 
@@ -59,7 +67,7 @@ def initial_state(
     """
     params = _check_params(params)
     _seed(seed)
-    return simr_interface.initial_state(params, potential, n1, n2, heat1, heat2)
+    return simr_interface.initial_state(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
 
 def _check_params(params: np.ndarray) -> np.ndarray:
@@ -67,6 +75,12 @@ def _check_params(params: np.ndarray) -> np.ndarray:
     if params.shape != (N_PARAMS,):
         raise ValueError(f"expected {N_PARAMS} parameters, got shape {params.shape}")
     return params
+
+
+def _heat_mode(heat_mode: str) -> int:
+    if heat_mode not in HEAT_MODES:
+        raise ValueError(f"heat_mode must be one of {list(HEAT_MODES)}: {heat_mode!r}")
+    return HEAT_MODES[heat_mode]
 
 
 def _seed(seed: int | None) -> None:

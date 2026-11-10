@@ -31,16 +31,16 @@ contains
 
   ! Run one collision and return every particle at the end.
   ! Call set_seed or seed_from_system first: this doesn't seed the generator itself.
-  subroutine run_collision(collision_param, potential, npts1, npts2, heat_1, heat_2, final_state)
+  subroutine run_collision(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode, final_state)
 
     real (kind=8), dimension(22), intent(in) :: collision_param
-    integer, intent(in) :: potential, npts1, npts2
+    integer, intent(in) :: potential, npts1, npts2, heat_mode
     real (kind=8), intent(in) :: heat_1, heat_2
     real (kind=8), dimension(npts1+npts2+1,6), intent(out) :: final_state
 
     integer (kind=4) :: nstep_local, i
 
-    call setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2)
+    call setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode)
 
     nstep_local = int((tend - tstart) / h) + 2
     do i = 1, nstep_local
@@ -54,14 +54,14 @@ contains
 
   ! Set up one collision and return every particle at the start, before any step is taken.
   ! The same inputs and seed give exactly the starting state run_collision steps from.
-  subroutine initial_state(collision_param, potential, npts1, npts2, heat_1, heat_2, start_state)
+  subroutine initial_state(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode, start_state)
 
     real (kind=8), dimension(22), intent(in) :: collision_param
-    integer, intent(in) :: potential, npts1, npts2
+    integer, intent(in) :: potential, npts1, npts2, heat_mode
     real (kind=8), intent(in) :: heat_1, heat_2
     real (kind=8), dimension(npts1+npts2+1,6), intent(out) :: start_state
 
-    call setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2)
+    call setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode)
     start_state = x0
     call end_run
 
@@ -69,10 +69,10 @@ contains
 
   ! Shared by run_collision and initial_state: sets SPAM's module variables the way basic_run does for a
   ! model string, then places both galaxies' particles at the start time.
-  subroutine setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2)
+  subroutine setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode)
 
     real (kind=8), dimension(22), intent(in) :: collision_param
-    integer, intent(in) :: potential, npts1, npts2
+    integer, intent(in) :: potential, npts1, npts2, heat_mode
     real (kind=8), intent(in) :: heat_1, heat_2
 
     call STANDARD_GALAXY1(mass1, epsilon1, rin1, rout1, rscale1, theta1, phi1, opt1, heat1)
@@ -99,6 +99,12 @@ contains
     ! Random motion added to each disk's particles. STANDARD_GALAXY1/2 set both to 0.
     heat1 = heat_1
     heat2 = heat_2
+    ! heat_mode 0: Wallin's kicks, in [0, heat). 1: centered, in [-heat/2, heat/2), so no drift.
+    if (heat_mode == 1) then
+      heat_offset = 0.5d0
+    else
+      heat_offset = 0.0d0
+    end if
 
     ! Same values as custom_collision uses for a model string
     potential_type = potential

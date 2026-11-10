@@ -34,6 +34,9 @@ module parameters_module
     
     real (kind=8), parameter :: hbase = 0.001d0
     integer(kind=4) :: potential_type = 0
+    ! SIMR: subtracted from randm() when heat is added (see profile in setup_module).
+    ! 0 is Wallin's original (kicks in [0, heat), so a heated disk drifts); 0.5 centers them.
+    real (kind=8) :: heat_offset = 0.0d0
 
     integer, parameter :: ndim = 3
     real (kind=8) :: mass1 

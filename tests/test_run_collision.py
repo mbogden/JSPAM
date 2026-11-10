@@ -80,6 +80,26 @@ def test_heat_only_changes_starting_velocities():
     np.testing.assert_allclose(kick.mean(axis=0), heat / 2, rtol=0.05)
 
 
+def test_centered_heat_has_no_drift():
+    """Centered heat: same spread as Wallin's, but each kick is in [-heat/2, heat/2), with mean 0."""
+    heat = 0.4
+    cold = jspam.initial_state(PARAMS, n1=2000, n2=2000, seed=5)
+    hot = jspam.initial_state(PARAMS, n1=2000, n2=2000, seed=5, heat1=heat, heat2=heat, heat_mode="centered")
+    wallin = jspam.initial_state(PARAMS, n1=2000, n2=2000, seed=5, heat1=heat, heat2=heat)
+    np.testing.assert_array_equal(hot[:, :3], cold[:, :3])  # positions
+    kick = hot[:-1, 3:] - cold[:-1, 3:]
+    assert kick.min() >= -heat / 2 - 1e-12
+    assert kick.max() < heat / 2 + 1e-12
+    np.testing.assert_allclose(kick.mean(axis=0), 0.0, atol=0.02 * heat)
+    # The same random numbers, shifted by heat / 2: the two modes differ only by the drift
+    np.testing.assert_allclose(wallin[:-1, 3:] - hot[:-1, 3:], heat / 2, rtol=1e-9)
+
+
+def test_rejects_unknown_heat_mode():
+    with pytest.raises(ValueError):
+        jspam.run_collision(PARAMS, n1=10, n2=5, heat_mode="hot")
+
+
 def test_rejects_wrong_number_of_parameters():
     with pytest.raises(ValueError):
         jspam.run_collision(PARAMS[:5])
