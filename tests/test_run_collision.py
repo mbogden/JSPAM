@@ -59,6 +59,27 @@ def test_no_seed_differs_each_run():
     assert not np.allclose(first[:-1], seeded[:-1])  # an earlier seed doesn't carry over
 
 
+def test_initial_state_then_run_in_one_process():
+    start = jspam.initial_state(PARAMS, n1=10, n2=5, seed=3)
+    final = jspam.run_collision(PARAMS, n1=10, n2=5, seed=3)
+    assert start.shape == final.shape == (16, 6)
+    assert not np.allclose(start, final)  # the run moved the particles
+
+
+def test_heat_only_changes_starting_velocities():
+    """With one seed, heat changes nothing but the disk velocities, by the kick SPAM adds."""
+    heat = 0.4
+    cold = jspam.initial_state(PARAMS, n1=2000, n2=2000, seed=5)
+    hot = jspam.initial_state(PARAMS, n1=2000, n2=2000, seed=5, heat1=heat, heat2=heat)
+    np.testing.assert_array_equal(hot[:, :3], cold[:, :3])  # positions
+    np.testing.assert_allclose(hot[-1], cold[-1], rtol=1e-12)  # secondary's center
+    kick = hot[:-1, 3:] - cold[:-1, 3:]
+    # Wallin's heat: randm() * heat, so each component is in [0, heat) and the mean is heat / 2
+    assert kick.min() >= -1e-12
+    assert kick.max() < heat + 1e-12
+    np.testing.assert_allclose(kick.mean(axis=0), heat / 2, rtol=0.05)
+
+
 def test_rejects_wrong_number_of_parameters():
     with pytest.raises(ValueError):
         jspam.run_collision(PARAMS[:5])

@@ -46,6 +46,9 @@ print(final[-1])  # the last row is the secondary galaxy's center
 seed, they start from random positions that differ between runs, as in the original. The secondary
 galaxy's orbit has no random numbers, so it's the same either way.
 
+`heat1` and `heat2` add random motion to each disk's particles (0 by default, as in the original).
+`jspam.initial_state` takes the same arguments and returns the particles at the start, before any step.
+
 ## Tests
 ```bash
 pip install pytest

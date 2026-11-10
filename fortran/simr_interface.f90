@@ -29,14 +29,51 @@ contains
     call RANDOM_SEED()
   end subroutine seed_from_system
 
+  ! Run one collision and return every particle at the end.
   ! Call set_seed or seed_from_system first: this doesn't seed the generator itself.
-  subroutine run_collision(collision_param, potential, npts1, npts2, final_state)
+  subroutine run_collision(collision_param, potential, npts1, npts2, heat_1, heat_2, final_state)
 
     real (kind=8), dimension(22), intent(in) :: collision_param
     integer, intent(in) :: potential, npts1, npts2
+    real (kind=8), intent(in) :: heat_1, heat_2
     real (kind=8), dimension(npts1+npts2+1,6), intent(out) :: final_state
 
     integer (kind=4) :: nstep_local, i
+
+    call setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2)
+
+    nstep_local = int((tend - tstart) / h) + 2
+    do i = 1, nstep_local
+      call TAKE_A_STEP
+    enddo
+
+    final_state = x0
+    call end_run
+
+  end subroutine run_collision
+
+  ! Set up one collision and return every particle at the start, before any step is taken.
+  ! The same inputs and seed give exactly the starting state run_collision steps from.
+  subroutine initial_state(collision_param, potential, npts1, npts2, heat_1, heat_2, start_state)
+
+    real (kind=8), dimension(22), intent(in) :: collision_param
+    integer, intent(in) :: potential, npts1, npts2
+    real (kind=8), intent(in) :: heat_1, heat_2
+    real (kind=8), dimension(npts1+npts2+1,6), intent(out) :: start_state
+
+    call setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2)
+    start_state = x0
+    call end_run
+
+  end subroutine initial_state
+
+  ! Shared by run_collision and initial_state: sets SPAM's module variables the way basic_run does for a
+  ! model string, then places both galaxies' particles at the start time.
+  subroutine setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2)
+
+    real (kind=8), dimension(22), intent(in) :: collision_param
+    integer, intent(in) :: potential, npts1, npts2
+    real (kind=8), intent(in) :: heat_1, heat_2
 
     call STANDARD_GALAXY1(mass1, epsilon1, rin1, rout1, rscale1, theta1, phi1, opt1, heat1)
     call STANDARD_GALAXY2(mass2, epsilon2, rin2, rout2, rscale2, theta2, phi2, opt2, heat2)
@@ -58,6 +95,10 @@ contains
     rscale1 = collision_param(17:19)
     rscale2 = collision_param(20:22)
     use_sec_vec = .true.
+
+    ! Random motion added to each disk's particles. STANDARD_GALAXY1/2 set both to 0.
+    heat1 = heat_1
+    heat2 = heat_2
 
     ! Same values as custom_collision uses for a model string
     potential_type = potential
@@ -81,12 +122,10 @@ contains
     call INIT_RKVAR(x0, mass1, mass2, epsilon1, epsilon2, theta1, phi1, &
          theta2, phi2, rscale1, rscale2, rout1, rout2, n, n1, n2)
 
-    nstep_local = int((tend - tstart) / h) + 2
-    do i = 1, nstep_local
-      call TAKE_A_STEP
-    enddo
+  end subroutine setup_run
 
-    final_state = x0
+  ! Free what setup_run allocated, so the next run in the same process can start.
+  subroutine end_run()
 
     ! DEALLOCATE_RKVAR doesn't free these, which would stop a second run in the same process
     deallocate(ival11, ival22, ivaln, df_force11, df_force22, df_forcen, c3n)
@@ -95,6 +134,6 @@ contains
     deallocate(xout)
     deallocate(projected)
 
-  end subroutine run_collision
+  end subroutine end_run
 
 end module simr_interface
