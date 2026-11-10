@@ -11,6 +11,25 @@ module simr_interface
 
 contains
 
+  ! How many integers the compiler's random number generator needs for a seed.
+  subroutine seed_size(nseed)
+    integer, intent(out) :: nseed
+    call RANDOM_SEED(size=nseed)
+  end subroutine seed_size
+
+  ! Set the generator's seed, so the disk particles start the same way every run.
+  subroutine set_seed(values, nseed)
+    integer, intent(in) :: nseed
+    integer, dimension(nseed), intent(in) :: values
+    call RANDOM_SEED(put=values)
+  end subroutine set_seed
+
+  ! Seed the generator from the operating system, so every run differs (the original behavior).
+  subroutine seed_from_system()
+    call RANDOM_SEED()
+  end subroutine seed_from_system
+
+  ! Call set_seed or seed_from_system first: this doesn't seed the generator itself.
   subroutine run_collision(collision_param, potential, npts1, npts2, final_state)
 
     real (kind=8), dimension(22), intent(in) :: collision_param
@@ -19,7 +38,6 @@ contains
 
     integer (kind=4) :: nstep_local, i
 
-    call RANDOM_SEED()
     call STANDARD_GALAXY1(mass1, epsilon1, rin1, rout1, rscale1, theta1, phi1, opt1, heat1)
     call STANDARD_GALAXY2(mass2, epsilon2, rin2, rout2, rscale2, theta2, phi2, opt2, heat2)
     call TEST_COLLISION(n, n1, n2, time, inclination_degree, omega_degree, &

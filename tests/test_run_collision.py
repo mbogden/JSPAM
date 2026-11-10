@@ -38,6 +38,27 @@ def test_particle_count_does_not_change_orbit():
     np.testing.assert_allclose(final[-1], EXPECTED_LAST_ROW, rtol=1e-5, atol=1e-6)
 
 
+def test_same_seed_gives_same_particles():
+    first = jspam.run_collision(PARAMS, n1=50, n2=50, seed=7)
+    second = jspam.run_collision(PARAMS, n1=50, n2=50, seed=7)
+    np.testing.assert_array_equal(first, second)
+
+
+def test_different_seeds_give_different_particles():
+    first = jspam.run_collision(PARAMS, n1=50, n2=50, seed=7)
+    second = jspam.run_collision(PARAMS, n1=50, n2=50, seed=8)
+    assert not np.allclose(first[:-1], second[:-1])
+    np.testing.assert_allclose(first[-1], second[-1], rtol=1e-12)  # the orbit has no random numbers
+
+
+def test_no_seed_differs_each_run():
+    seeded = jspam.run_collision(PARAMS, n1=50, n2=50, seed=7)
+    first = jspam.run_collision(PARAMS, n1=50, n2=50)
+    second = jspam.run_collision(PARAMS, n1=50, n2=50)
+    assert not np.allclose(first[:-1], second[:-1])
+    assert not np.allclose(first[:-1], seeded[:-1])  # an earlier seed doesn't carry over
+
+
 def test_rejects_wrong_number_of_parameters():
     with pytest.raises(ValueError):
         jspam.run_collision(PARAMS[:5])

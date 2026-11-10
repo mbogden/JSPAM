@@ -38,12 +38,13 @@ model = (
 )
 params = np.array(model.split(","), dtype=float)
 
-final = jspam.run_collision(params, n1=1000, n2=1000)
+final = jspam.run_collision(params, n1=1000, n2=1000, seed=1)
 print(final.shape)  # (2001, 6): x, y, z, vx, vy, vz for each particle
 print(final[-1])  # the last row is the secondary galaxy's center
 ```
-Disk particles start from unseeded random positions, so they differ between runs. The secondary
-galaxy's orbit doesn't.
+`seed` sets where the disk particles start, so the same seed gives the same particles. Without a
+seed, they start from random positions that differ between runs, as in the original. The secondary
+galaxy's orbit has no random numbers, so it's the same either way.
 
 ## Tests
 ```bash
