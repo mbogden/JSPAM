@@ -19,6 +19,10 @@ Compare with the original code using the `upstream-d6a61db` tag:
 - `profile` in `fortran/setup_module.f90` subtracts `heat_offset` (new, in `parameters_module.f90`)
   from each heat kick. It's 0 by default, which gives the original results exactly; 0.5 centers the
   kicks so heated disks don't drift.
+- `init_distribution` in `fortran/df_module.f90` reads the mass model (`lnl`, `rchalo`, `mhalo`,
+  `mbulge`, `hbulge`, `hdisk`) from module variables instead of local constants, with Wallin's values as
+  defaults, and divides by `norm` instead of the fixed 7.13333. `norm` is 7.13333 by default; with
+  `mass_normalization = 1` it's the model's actual total mass, so the unit galaxy's mass is 1.
 
 Only the Fortran is packaged. The `java/`, `js/`, `python/` and `archive/` folders are unchanged.
 
@@ -53,6 +57,9 @@ galaxy's orbit has no random numbers, so it's the same either way.
 With `heat_mode="wallin"` (the default) each velocity component gets a kick in [0, heat), which is
 always positive, so a heated disk drifts; `"centered"` gives kicks in [-heat/2, heat/2), with no drift.
 `jspam.initial_state` takes the same arguments and returns the particles at the start, before any step.
+`mass_model` (a dict of values to change from `jspam.MASS_MODEL_DEFAULTS`) and `normalization`
+(`"wallin"` or `"total"`) set the unit galaxy both galaxies are built from; `jspam.mass_profile` returns
+its tables.
 
 ## Tests
 ```bash

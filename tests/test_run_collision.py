@@ -100,6 +100,86 @@ def test_rejects_unknown_heat_mode():
         jspam.run_collision(PARAMS, n1=10, n2=5, heat_mode="hot")
 
 
+# --- Mass model ---------------------------------------------------------------------------------------
+
+WALLIN_NORM = 7.13333  # Wallin's fixed normalization: the sum of the default masses
+
+# A model from archive/data.txt (line 3) whose secondary passes close enough for dynamical friction
+# (lnl) to change the orbit. In the SDSS model above it never gets close, so lnl has no effect there.
+CLOSE_PARAMS = np.array(
+    [
+        1.08119, -1.66798, -2.06826, -0.18438, -0.39693, -0.02919, 0.51654, 0.36192, 0.94043, 0.43877, 12.97415,
+        135.11902, 97.54035, 305.01225, 0.3, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+    ]
+)  # fmt: skip
+
+
+def test_explicit_defaults_match_no_mass_model():
+    default = jspam.run_collision(PARAMS, n1=10, n2=5, seed=1)
+    explicit = jspam.run_collision(
+        PARAMS, n1=10, n2=5, seed=1, mass_model=jspam.MASS_MODEL_DEFAULTS, normalization="wallin"
+    )
+    np.testing.assert_array_equal(default, explicit)
+
+
+def test_wallin_normalization_total_is_not_one():
+    """The true total at the defaults is about 7.101, so dividing by 7.13333 leaves 0.9955."""
+    profile = jspam.mass_profile()
+    np.testing.assert_allclose(profile["total"][-1], 0.99549, rtol=1e-4)
+
+
+def test_total_normalization_is_one_whatever_the_masses():
+    for mass_model in [{}, {"m_halo": 11.6}, {"m_bulge": 1.0, "h_disk": 2.0}]:
+        profile = jspam.mass_profile(mass_model, normalization="total")
+        np.testing.assert_allclose(profile["total"][-1], 1.0, rtol=1e-12)
+
+
+def test_each_mass_value_reaches_its_own_component():
+    """Guards against a swap: each value changes the part of the galaxy it names, and only that part."""
+    base = jspam.mass_profile()
+    # Masses, with Wallin's fixed divisor so each shows up directly
+    bulge = jspam.mass_profile({"m_bulge": 0.6})
+    np.testing.assert_allclose(bulge["bulge"][-1], 0.6 / WALLIN_NORM, rtol=1e-6)
+    np.testing.assert_array_equal(bulge["halo"], base["halo"])
+    np.testing.assert_array_equal(bulge["disk"], base["disk"])
+    halo = jspam.mass_profile({"m_halo": 11.6})
+    np.testing.assert_allclose(halo["halo"], 2 * base["halo"], rtol=1e-12)
+    np.testing.assert_array_equal(halo["bulge"], base["bulge"])
+    disk = jspam.mass_profile({"h_disk": 2.0})  # the disk's mass equals its scale length
+    np.testing.assert_allclose(disk["disk"][-1], 2.0 / WALLIN_NORM, rtol=1e-2)
+    np.testing.assert_array_equal(disk["halo"], base["halo"])
+    # Shapes: h_bulge spreads the bulge without changing its mass
+    wide_bulge = jspam.mass_profile({"h_bulge": 0.5})
+    np.testing.assert_allclose(wide_bulge["bulge"][-1], base["bulge"][-1], rtol=1e-6)
+    assert wide_bulge["bulge"][100] < base["bulge"][100]  # less of it inside r = 0.1
+    np.testing.assert_array_equal(wide_bulge["halo"], base["halo"])
+    # r_scale is the halo's core radius, but the whole table's radius grid is built from it too, so it
+    # stretches every component (Wallin's design), while the integrator still reads rows at fixed distances
+    stretched = jspam.mass_profile({"r_scale": 5.0})
+    for component in ("halo", "disk", "bulge"):
+        assert not np.allclose(stretched[component], base[component])
+
+
+def test_lnl_changes_a_close_encounter():
+    base = jspam.run_collision(CLOSE_PARAMS, n1=5, n2=5, seed=1, mass_model={"lnl": 0.0})
+    friction = jspam.run_collision(CLOSE_PARAMS, n1=5, n2=5, seed=1, mass_model={"lnl": 0.5})
+    assert np.abs(base[-1, :3] - friction[-1, :3]).max() > 1e-3
+
+
+def test_mass_model_does_not_leak_into_the_next_run():
+    first = jspam.run_collision(PARAMS, n1=10, n2=5, seed=1)
+    jspam.run_collision(PARAMS, n1=10, n2=5, seed=1, mass_model={"m_halo": 11.6}, normalization="total")
+    again = jspam.run_collision(PARAMS, n1=10, n2=5, seed=1)
+    np.testing.assert_array_equal(first, again)
+
+
+def test_rejects_unknown_mass_model_values():
+    with pytest.raises(ValueError):
+        jspam.mass_profile({"mhalo": 5.8})
+    with pytest.raises(ValueError):
+        jspam.mass_profile(normalization="unit")
+
+
 def test_rejects_wrong_number_of_parameters():
     with pytest.raises(ValueError):
         jspam.run_collision(PARAMS[:5])

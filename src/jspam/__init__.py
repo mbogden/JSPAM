@@ -11,6 +11,21 @@ EXTENDED = 1
 # How heat is added to the disk velocities. See run_collision.
 HEAT_MODES = {"wallin": 0, "centered": 1}
 
+# The unit galaxy's mass model (EXTENDED potential), in the order set_mass_model takes them. The defaults
+# are Wallin's values exactly as the Fortran stores them: h_bulge and m_bulge were single-precision
+# literals, so they're 0.2 and 0.3333 rounded to single precision.
+MASS_MODEL_DEFAULTS = {
+    "lnl": 0.001,  # strength of dynamical friction (Coulomb logarithm)
+    "r_scale": 10.0,  # halo core radius (rchalo); also sets the tables' radius grid, so it stretches everything
+    "m_halo": 5.8,  # halo mass
+    "m_bulge": float(np.float32(0.3333)),  # bulge mass
+    "h_bulge": float(np.float32(0.2)),  # bulge scale length
+    "h_disk": 1.0,  # disk scale length; also the disk's mass
+}
+# What the mass tables are divided by. "wallin": the fixed 7.13333 (the sum of the default masses), so
+# changing a mass changes the galaxy's total mass. "total": this model's actual total, so it's always 1.
+NORMALIZATIONS = {"wallin": 0, "total": 1}
+
 
 def run_collision(
     params: np.ndarray,
@@ -21,6 +36,8 @@ def run_collision(
     heat1: float = 0.0,
     heat2: float = 0.0,
     heat_mode: str = "wallin",
+    mass_model: dict[str, float] | None = None,
+    normalization: str = "wallin",
 ) -> np.ndarray:
     """Run one collision and return the final state of every particle.
 
@@ -36,12 +53,16 @@ def run_collision(
         heat_mode: "wallin" (the original) adds a value in [0, heat) to each of vx, vy and vz, which
             is always positive, so a heated disk drifts toward +x, +y, +z. "centered" adds a value in
             [-heat/2, heat/2): the same spread, with no drift.
+        mass_model: values to change from `MASS_MODEL_DEFAULTS`; the rest keep their defaults. Used
+            by the EXTENDED potential. Both galaxies share it, scaled by their masses.
+        normalization: "wallin" (the original) or "total". See `NORMALIZATIONS`.
 
     Returns:
         x, y, z, vx, vy, vz at the end of the run, shape (n1 + n2 + 1, 6). The last row is the
         secondary galaxy's center.
     """
     params = _check_params(params)
+    _set_mass_model(mass_model, normalization)
     _seed(seed)
     return simr_interface.run_collision(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
@@ -55,6 +76,8 @@ def initial_state(
     heat1: float = 0.0,
     heat2: float = 0.0,
     heat_mode: str = "wallin",
+    mass_model: dict[str, float] | None = None,
+    normalization: str = "wallin",
 ) -> np.ndarray:
     """Set up one collision and return every particle at the start, before any step.
 
@@ -66,8 +89,26 @@ def initial_state(
         secondary galaxy's center.
     """
     params = _check_params(params)
+    _set_mass_model(mass_model, normalization)
     _seed(seed)
     return simr_interface.initial_state(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
+
+
+def mass_profile(mass_model: dict[str, float] | None = None, normalization: str = "wallin") -> dict[str, np.ndarray]:
+    """The unit galaxy's tables, as the integrator reads them.
+
+    Args:
+        mass_model, normalization: as in `run_collision`.
+
+    Returns:
+        Arrays of shape (10000,), one row per table entry: "radius" (SPAM distance units, where the
+        integrator picks that row), enclosed mass of "halo", "disk", "bulge" and "total" (for a galaxy
+        of mass 1 in the 22 parameters), and "force", the acceleration a particle feels there.
+    """
+    _set_mass_model(mass_model, normalization)
+    nrows = simr_interface.mass_profile_size()
+    names = ("radius", "halo", "disk", "bulge", "total", "force")
+    return dict(zip(names, simr_interface.mass_profile(nrows)))
 
 
 def _check_params(params: np.ndarray) -> np.ndarray:
@@ -81,6 +122,20 @@ def _heat_mode(heat_mode: str) -> int:
     if heat_mode not in HEAT_MODES:
         raise ValueError(f"heat_mode must be one of {list(HEAT_MODES)}: {heat_mode!r}")
     return HEAT_MODES[heat_mode]
+
+
+def _set_mass_model(mass_model: dict[str, float] | None, normalization: str) -> None:
+    """Set the mass model in the Fortran. Called before every run, so one run's model can't leak into the next."""
+    values = dict(MASS_MODEL_DEFAULTS)
+    for name, value in (mass_model or {}).items():
+        if name not in values:
+            raise ValueError(f"unknown mass model value {name!r}; expected some of {list(values)}")
+        values[name] = float(value)
+    if normalization not in NORMALIZATIONS:
+        raise ValueError(f"normalization must be one of {list(NORMALIZATIONS)}: {normalization!r}")
+    # The Fortran takes them by position, in MASS_MODEL_DEFAULTS' order
+    ordered = np.array([values[name] for name in MASS_MODEL_DEFAULTS], dtype=float)
+    simr_interface.set_mass_model(ordered, NORMALIZATIONS[normalization])
 
 
 def _seed(seed: int | None) -> None:

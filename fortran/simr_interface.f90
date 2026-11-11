@@ -29,6 +29,47 @@ contains
     call RANDOM_SEED()
   end subroutine seed_from_system
 
+  ! Set the mass model used by every run after this, until it's set again (Wallin's until then).
+  ! values, in order: lnl, r_scale (rchalo), m_halo, m_bulge, h_bulge, h_disk.
+  ! normalization 0: divide by Wallin's fixed 7.13333. 1: divide by this model's actual total mass.
+  subroutine set_mass_model(values, normalization)
+    real (kind=8), dimension(6), intent(in) :: values
+    integer, intent(in) :: normalization
+    mm_lnl = values(1)
+    mm_rchalo = values(2)
+    mm_mhalo = values(3)
+    mm_mbulge = values(4)
+    mm_hbulge = values(5)
+    mm_hdisk = values(6)
+    mass_normalization = normalization
+  end subroutine set_mass_model
+
+  ! Rows in the unit galaxy's tables (df_module's nnn).
+  subroutine mass_profile_size(nrows)
+    integer, intent(out) :: nrows
+    nrows = nnn
+  end subroutine mass_profile_size
+
+  ! Build the unit galaxy from the current mass model and return its tables, row by row, as the
+  ! integrator reads them: radius is the distance (SPAM units) at which df_index picks each row, and
+  ! force is what a particle feels there. Masses are enclosed, for a galaxy of mass 1 in the 22
+  ! parameters. With r_scale other than 10, the rows no longer match the table's own radii (Wallin's).
+  subroutine mass_profile(nrows, radius, m_halo, m_disk, m_bulge, m_total, force)
+    integer, intent(in) :: nrows
+    real (kind=8), dimension(nrows), intent(out) :: radius, m_halo, m_disk, m_bulge, m_total, force
+    integer :: j
+    call INIT_DISTRIBUTION
+    ! df_index: row = int(r * rs_internal / 100 * nnn) + 1, so row j starts at this distance
+    do j = 1, nrows
+      radius(j) = (j - 1) * 100.0d0 / (rs_internal * nnn)
+    end do
+    m_halo = mass_halo(1:nrows)
+    m_disk = mass_disk(1:nrows)
+    m_bulge = mass_bulge(1:nrows)
+    m_total = mass_total(1:nrows)
+    force = acceleration_particle(1:nrows) * rs_internal * rs_internal
+  end subroutine mass_profile
+
   ! Run one collision and return every particle at the end.
   ! Call set_seed or seed_from_system first: this doesn't seed the generator itself.
   subroutine run_collision(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode, final_state)

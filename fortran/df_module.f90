@@ -33,6 +33,19 @@ module df_module
     real (kind=8) :: pscale
 
     real (kind=8) :: lnl
+
+! SIMR: the mass model, settable from Python through simr_interface (set_mass_model).
+! The defaults are Wallin's values, exactly as init_distribution used to set them (hbulge and mbulge
+! were single-precision literals), so programs that never set them get the original results.
+    real (kind=8) :: mm_lnl = 0.001d0
+    real (kind=8) :: mm_rchalo = 10.0d0
+    real (kind=8) :: mm_mhalo = 5.8d0
+    real (kind=8) :: mm_mbulge = 0.3333
+    real (kind=8) :: mm_hbulge = 0.2
+    real (kind=8) :: mm_hdisk = 1.0d0
+! SIMR: what the tables are divided by. 0: Wallin's fixed 7.13333 (the sum of the default masses, so
+! changing a mass changes the galaxy's total). 1: this model's actual total, so the galaxy's mass is 1.
+    integer (kind=4) :: mass_normalization = 0
 !
 !     ----------------------------------------------------------------
 !
@@ -83,6 +96,7 @@ CONTAINS
     real (kind=8) :: acc_merge, rad_merge, acc
 
     integer (kind=4) :: j, nmax, k, nmerge, ntotal, jj
+    real (kind=8) :: norm
 
 
 
@@ -94,12 +108,13 @@ CONTAINS
     lnl = 0.00d0
 ! default for Merger Zoo
     lnl = 0.001d0
+    lnl = mm_lnl   ! SIMR
 
 !!!!!
 ! set up the parameters for the halo
-    mhalo = 5.8d0  
+    mhalo = mm_mhalo   ! SIMR: was 5.8d0
     rhalo = 10.0d0
-    rchalo = 10.0d0
+    rchalo = mm_rchalo   ! SIMR: was 10.0d0
     gammahalo = 1.0d0
     epsilon_halo = 0.4d0 
     SqrtPI = sqrt(pi)
@@ -136,13 +151,13 @@ CONTAINS
 ! set the fundamental disk parameters
     zdisk = 0.2
     zdiskmax = 3.5
-    hdisk = 1.0
+    hdisk = mm_hdisk   ! SIMR: was 1.0
     
 
 !!!!!
 ! set the fundamental bulge parameters
-    hbulge = 0.2
-    mbulge = 0.3333
+    hbulge = mm_hbulge   ! SIMR: was 0.2
+    mbulge = mm_mbulge   ! SIMR: was 0.3333
     
     
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!3
@@ -431,26 +446,29 @@ end do
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! normalize to the unit mass
+! SIMR: norm was always 7.13333; mass_normalization 1 uses this model's actual total instead
+norm = 7.13333d0
+if (mass_normalization == 1) norm = mass_total(nmax)
 
 do  j= 1, ntotal
-  mass_total(j)  = mass_total(j) / 7.13333d0
-  mass_halo(j)   = mass_halo(j)  / 7.13333d0
-  mass_disk(j)   = mass_disk(j)  / 7.13333d0
-  mass_bulge(j)  = mass_bulge(j) / 7.13333d0
-  new_mass(j)    = new_mass(j)   / 7.13333d0
+  mass_total(j)  = mass_total(j) / norm
+  mass_halo(j)   = mass_halo(j)  / norm
+  mass_disk(j)   = mass_disk(j)  / norm
+  mass_bulge(j)  = mass_bulge(j) / norm
+  new_mass(j)    = new_mass(j)   / norm
 
-  rho_total(j)   = rho_total(j)  / 7.13333d0
-  new_rho(j)     = new_rho(j)    / 7.13333d0
+  rho_total(j)   = rho_total(j)  / norm
+  new_rho(j)     = new_rho(j)    / norm
  
-  vr(j)          = vr(j)      / 7.13333d0
-  vr2(j)         = vr2(j)     / 7.13333d0
-  new_vr(j)      = new_vr(j)  / 7.13333d0
-  new_vr2(j)     = new_vr2(j) / 7.13333d0
+  vr(j)          = vr(j)      / norm
+  vr2(j)         = vr2(j)     / norm
+  new_vr(j)      = new_vr(j)  / norm
+  new_vr2(j)     = new_vr2(j) / norm
 
   rad(j)         = rad(j) 
 
-  acceleration_particle(j) = acceleration_particle(j) / 7.13333d0
-  acceleration(j)          = acceleration(j)  / 7.13333d0
+  acceleration_particle(j) = acceleration_particle(j) / norm
+  acceleration(j)          = acceleration(j)  / norm
 
 !!  write(11,*) rad(j), new_rho(j), new_mass(j),  new_vr(j)
 end do
