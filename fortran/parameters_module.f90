@@ -37,6 +37,12 @@ module parameters_module
     ! SIMR: subtracted from randm() when heat is added (see profile in setup_module).
     ! 0 is Wallin's original (kicks in [0, heat), so a heated disk drifts); 0.5 centers them.
     real (kind=8) :: heat_offset = 0.0d0
+    ! SIMR: what create_collision found while choosing the start time, kept so it can be reported.
+    ! tstart_search is getTStart's output: the start it chose (before create_collision's overrides),
+    ! the closest approach's distance and speed, and the closest approach's time.
+    ! tstart_fallback is true when an override replaced that start with -5.
+    real (kind=8), dimension(4) :: tstart_search = 0.0d0
+    logical :: tstart_fallback = .false.
 
     integer, parameter :: ndim = 3
     real (kind=8) :: mass1 

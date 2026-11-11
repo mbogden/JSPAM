@@ -183,3 +183,43 @@ def test_rejects_unknown_mass_model_values():
 def test_rejects_wrong_number_of_parameters():
     with pytest.raises(ValueError):
         jspam.run_collision(PARAMS[:5])
+
+
+# --- Timing and orbits -------------------------------------------------------------------------------
+
+
+def test_timing_matches_a_run():
+    timing = jspam.timing(PARAMS)
+    assert timing["t_start"] < 0
+    assert timing["n_steps"] == int(-timing["t_start"] / 0.001) + 2
+    assert not timing["start_fallback"]
+    assert timing["t_start"] == timing["t_start_found"]
+    assert timing["t_start"] < timing["t_closest"] < 0
+    assert timing["closest_distance"] > 0 and timing["closest_speed"] > 0
+    start = jspam.initial_state(PARAMS, n1=5, n2=5, seed=1)
+    orbit = jspam.run_orbit(PARAMS, n_steps=0)
+    np.testing.assert_array_equal(orbit[0, :6], start[-1])  # the same starting center
+    np.testing.assert_allclose(orbit[0, 6], timing["t_start"])
+
+
+def test_orbit_ends_where_a_run_leaves_the_secondary():
+    orbit = jspam.run_orbit(PARAMS)
+    final = jspam.run_collision(PARAMS, n1=10, n2=5, seed=1)
+    assert orbit.shape == (jspam.timing(PARAMS)["n_steps"] + 1, 7)
+    np.testing.assert_array_equal(orbit[-1, :6], final[-1])
+    assert 0 <= orbit[-1, 6] < 0.0025  # 1 to 2 steps past now
+
+
+def test_orbit_closest_approach_matches_timing():
+    timing = jspam.timing(PARAMS)
+    orbit = jspam.run_orbit(PARAMS)
+    separation = np.linalg.norm(orbit[:, :3], axis=1)
+    closest = separation.argmin()
+    np.testing.assert_allclose(separation[closest], timing["closest_distance"], rtol=1e-3)
+    np.testing.assert_allclose(orbit[closest, 6], timing["t_closest"], atol=0.01)
+
+
+def test_orbit_uses_the_mass_model():
+    heavy = jspam.run_orbit(PARAMS, mass_model={"r_scale": 5.0}, normalization="total")
+    plain = jspam.run_orbit(PARAMS, n_steps=len(heavy) - 1, normalization="total")
+    assert not np.allclose(heavy[-1, :3], plain[-1, :3])

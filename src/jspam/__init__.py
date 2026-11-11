@@ -94,6 +94,64 @@ def initial_state(
     return simr_interface.initial_state(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
 
+def timing(
+    params: np.ndarray,
+    potential: int = EXTENDED,
+    mass_model: dict[str, float] | None = None,
+    normalization: str = "wallin",
+) -> dict[str, float | int | bool]:
+    """When a run starts, how many steps it takes, and what the start-time search found.
+
+    Only the two galaxy centers are set up; nothing is stepped, so this is fast. Takes the same
+    physics arguments as `run_collision` (no particles or seed are needed).
+
+    Returns:
+        "t_start": the start time a run uses (SPAM time units, now = 0).
+        "n_steps": steps from t_start to the end of a run (1 to 2 steps past 0, as in basic_run).
+        "start_fallback": True when t_start is SPAM's -5 fallback, used when the search's start was
+            earlier than -12 or within one step of 0.
+        "t_start_found": the search's start, before that fallback.
+        "t_closest", "closest_distance", "closest_speed": the closest approach between the centers in
+            the search's window (back to t = -30).
+    """
+    params = _check_params(params)
+    _set_mass_model(mass_model, normalization)
+    t_start, n_steps, fallback, search = simr_interface.get_timing(params, potential)
+    return {
+        "t_start": float(t_start),
+        "n_steps": int(n_steps),
+        "start_fallback": bool(fallback),
+        "t_start_found": float(search[0]),
+        "t_closest": float(search[3]),
+        "closest_distance": float(search[1]),
+        "closest_speed": float(search[2]),
+    }
+
+
+def run_orbit(
+    params: np.ndarray,
+    n_steps: int | None = None,
+    potential: int = EXTENDED,
+    mass_model: dict[str, float] | None = None,
+    normalization: str = "wallin",
+) -> np.ndarray:
+    """The secondary galaxy's center at every step of a run, with no particles.
+
+    Args:
+        params, potential, mass_model, normalization: as in `run_collision`.
+        n_steps: how many steps to take from the start. None takes a full run's (`timing`'s n_steps),
+            so the last row is where `run_collision` leaves the secondary's center.
+
+    Returns:
+        x, y, z, vx, vy, vz, t at the start and after each step, shape (n_steps + 1, 7).
+    """
+    params = _check_params(params)
+    if n_steps is None:
+        n_steps = timing(params, potential, mass_model, normalization)["n_steps"]
+    _set_mass_model(mass_model, normalization)
+    return simr_interface.run_orbit(params, potential, n_steps)
+
+
 def mass_profile(mass_model: dict[str, float] | None = None, normalization: str = "wallin") -> dict[str, np.ndarray]:
     """The unit galaxy's tables, as the integrator reads them.
 

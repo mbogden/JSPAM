@@ -23,6 +23,9 @@ Compare with the original code using the `upstream-d6a61db` tag:
   `mbulge`, `hbulge`, `hdisk`) from module variables instead of local constants, with Wallin's values as
   defaults, and divides by `norm` instead of the fixed 7.13333. `norm` is 7.13333 by default; with
   `mass_normalization = 1` it's the model's actual total mass, so the unit galaxy's mass is 1.
+- `create_collision` in `fortran/init_module.f90` keeps what the start-time search found
+  (`tstart_search`) and whether its -5 fallback was used (`tstart_fallback`), both new in
+  `parameters_module.f90`, so they can be reported. The start time itself is unchanged.
 
 Only the Fortran is packaged. The `java/`, `js/`, `python/` and `archive/` folders are unchanged.
 
@@ -60,6 +63,11 @@ always positive, so a heated disk drifts; `"centered"` gives kicks in [-heat/2, 
 `mass_model` (a dict of values to change from `jspam.MASS_MODEL_DEFAULTS`) and `normalization`
 (`"wallin"` or `"total"`) set the unit galaxy both galaxies are built from; `jspam.mass_profile` returns
 its tables.
+
+`jspam.timing(params)` gives a run's start time and step count, whether the start fell back to -5,
+and the closest approach the start-time search found. `jspam.run_orbit(params)` returns the secondary
+galaxy's center at every step (x, y, z, vx, vy, vz, t), with no particles; its last row is where
+`run_collision` leaves the secondary.
 
 ## Tests
 ```bash

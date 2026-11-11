@@ -156,12 +156,16 @@ subroutine create_collision
 	tminVals = getTStart(rv4min, mass1, mass2, sqrt(eps1), sqrt(eps2) , h,-30.0d0 ,10.0d0*(rout1), rout1, rout2)
 		
 	tmpT = tminVals(1)
+	tstart_search = tminVals    ! SIMR: kept for reporting
+	tstart_fallback = .false.   ! SIMR
 	if ( tmpT < -12.0 ) then
 	  tmpT = -5
+	  tstart_fallback = .true.  ! SIMR
 	endif
-		
+
 	if ( abs(tmpT) < h) then
 	  tmpT = -5
+	  tstart_fallback = .true.  ! SIMR
 	endif
 		tstart = tmpT
                 time = tstart

@@ -108,6 +108,51 @@ contains
 
   end subroutine initial_state
 
+  ! When a run starts and how many steps it takes, plus what the start-time search found. Only the two
+  ! centers are set up (no particles), and nothing is stepped.
+  ! search: getTStart's start time (before the -12 and near-0 overrides), the closest approach's distance,
+  ! speed and time. start_fallback is 1 when an override replaced the start with -5.
+  subroutine get_timing(collision_param, potential, t_start, n_steps, start_fallback, search)
+
+    real (kind=8), dimension(22), intent(in) :: collision_param
+    integer, intent(in) :: potential
+    real (kind=8), intent(out) :: t_start
+    integer, intent(out) :: n_steps, start_fallback
+    real (kind=8), dimension(4), intent(out) :: search
+
+    call setup_run(collision_param, potential, 0, 0, 0.0d0, 0.0d0, 0)
+    t_start = tstart
+    n_steps = int((tend - tstart) / h) + 2   ! the same count run_collision steps
+    start_fallback = 0
+    if (tstart_fallback) start_fallback = 1
+    search = tstart_search
+    call end_run
+
+  end subroutine get_timing
+
+  ! The secondary galaxy's center at the start and after each of n_steps steps.
+  ! Each row is x, y, z, vx, vy, vz, t. No particles, so no random numbers are used.
+  subroutine run_orbit(collision_param, potential, n_steps, orbit)
+
+    real (kind=8), dimension(22), intent(in) :: collision_param
+    integer, intent(in) :: potential, n_steps
+    real (kind=8), dimension(n_steps+1,7), intent(out) :: orbit
+
+    integer :: step
+
+    call setup_run(collision_param, potential, 0, 0, 0.0d0, 0.0d0, 0)
+    ! The secondary's center is x0's last row, x0(n,:): placing it (perturber_position_vec) did n = n + 1
+    orbit(1,1:6) = x0(n,1:6)
+    orbit(1,7) = time
+    do step = 1, n_steps
+      call TAKE_A_STEP
+      orbit(step+1,1:6) = x0(n,1:6)
+      orbit(step+1,7) = time
+    enddo
+    call end_run
+
+  end subroutine run_orbit
+
   ! Shared by run_collision and initial_state: sets SPAM's module variables the way basic_run does for a
   ! model string, then places both galaxies' particles at the start time.
   subroutine setup_run(collision_param, potential, npts1, npts2, heat_1, heat_2, heat_mode)
