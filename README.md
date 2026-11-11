@@ -26,6 +26,9 @@ Compare with the original code using the `upstream-d6a61db` tag:
 - `create_collision` in `fortran/init_module.f90` keeps what the start-time search found
   (`tstart_search`) and whether its -5 fallback was used (`tstart_fallback`), both new in
   `parameters_module.f90`, so they can be reported. The start time itself is unchanged.
+- `getTStart` in `fortran/setup_module.f90` keeps its backward path of the secondary's center
+  (`search_path`). A start time can be given (`start_override`, set by `set_start_time`), in which case
+  `getTStart` isn't called; without one, the start is SPAM's, as in the original.
 
 Only the Fortran is packaged. The `java/`, `js/`, `python/` and `archive/` folders are unchanged.
 
@@ -68,6 +71,8 @@ its tables.
 and the closest approach the start-time search found. `jspam.run_orbit(params)` returns the secondary
 galaxy's center at every step (x, y, z, vx, vy, vz, t), with no particles; its last row is where
 `run_collision` leaves the secondary.
+`jspam.search_orbit(params)` returns the path the start-time search integrates, from now back to
+t = -30. Every run function takes `t_start` to start at a given time instead of SPAM's choice.
 
 ## Tests
 ```bash

@@ -223,3 +223,54 @@ def test_orbit_uses_the_mass_model():
     heavy = jspam.run_orbit(PARAMS, mass_model={"r_scale": 5.0}, normalization="total")
     plain = jspam.run_orbit(PARAMS, n_steps=len(heavy) - 1, normalization="total")
     assert not np.allclose(heavy[-1, :3], plain[-1, :3])
+
+
+# --- The search path and a given start time ----------------------------------------------------------
+
+
+def test_search_orbit_goes_back_from_now():
+    path = jspam.search_orbit(PARAMS)
+    assert abs(len(path) - 30001) <= 2
+    np.testing.assert_allclose(path[0, :6], PARAMS[:6])  # now, as given
+    assert path[0, 6] == 0.0
+    assert -30.002 < path[-1, 6] <= -30.0 + 0.001
+    assert np.all(np.diff(path[:, 6]) < 0)
+
+
+def test_search_orbit_closest_point_matches_timing():
+    timing = jspam.timing(PARAMS)
+    separation = np.linalg.norm(jspam.search_orbit(PARAMS)[:, :3], axis=1)
+    np.testing.assert_allclose(separation.min(), timing["closest_distance"], rtol=1e-12)
+
+
+def test_run_starts_on_the_search_path():
+    timing = jspam.timing(PARAMS)
+    path = jspam.search_orbit(PARAMS)
+    # Placement steps back while t_start < t, so it takes ceil(-t_start / step) steps (one more than the
+    # nearest row when t_start isn't a whole number of steps)
+    row = int(np.ceil(-timing["t_start"] / jspam.STEP))
+    start = jspam.run_orbit(PARAMS, n_steps=0)[0]
+    np.testing.assert_allclose(start[:6], path[row, :6], rtol=1e-9, atol=1e-9)
+
+
+def test_given_start_time():
+    timing = jspam.timing(PARAMS, t_start=-8.0)
+    assert timing["t_start"] == -8.0
+    assert timing["n_steps"] == 8002
+    assert not timing["start_fallback"]
+    orbit = jspam.run_orbit(PARAMS, t_start=-8.0)
+    assert orbit[0, 6] == -8.0
+    np.testing.assert_allclose(orbit[-1, :6], PARAMS[:6], atol=0.02)  # still ends now
+    path = jspam.search_orbit(PARAMS)
+    np.testing.assert_allclose(orbit[0, :6], path[8000, :6], rtol=1e-9, atol=1e-9)
+
+
+def test_start_time_does_not_leak_into_the_next_run():
+    default = jspam.run_collision(PARAMS, n1=5, n2=5, seed=1)
+    jspam.run_collision(PARAMS, n1=5, n2=5, seed=1, t_start=-8.0)
+    np.testing.assert_array_equal(jspam.run_collision(PARAMS, n1=5, n2=5, seed=1), default)
+
+
+def test_rejects_a_start_after_now():
+    with pytest.raises(ValueError):
+        jspam.timing(PARAMS, t_start=0.5)

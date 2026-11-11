@@ -26,6 +26,10 @@ MASS_MODEL_DEFAULTS = {
 # changing a mass changes the galaxy's total mass. "total": this model's actual total, so it's always 1.
 NORMALIZATIONS = {"wallin": 0, "total": 1}
 
+# How far back SPAM's start-time search integrates (fixed in getTStart's call), and its step.
+SEARCH_WINDOW = 30.0
+STEP = 0.001
+
 
 def run_collision(
     params: np.ndarray,
@@ -38,6 +42,7 @@ def run_collision(
     heat_mode: str = "wallin",
     mass_model: dict[str, float] | None = None,
     normalization: str = "wallin",
+    t_start: float | None = None,
 ) -> np.ndarray:
     """Run one collision and return the final state of every particle.
 
@@ -56,6 +61,8 @@ def run_collision(
         mass_model: values to change from `MASS_MODEL_DEFAULTS`; the rest keep their defaults. Used
             by the EXTENDED potential. Both galaxies share it, scaled by their masses.
         normalization: "wallin" (the original) or "total". See `NORMALIZATIONS`.
+        t_start: when the run starts (SPAM time, now = 0, so negative). None lets SPAM's search choose,
+            as in the original (see `timing`).
 
     Returns:
         x, y, z, vx, vy, vz at the end of the run, shape (n1 + n2 + 1, 6). The last row is the
@@ -63,6 +70,7 @@ def run_collision(
     """
     params = _check_params(params)
     _set_mass_model(mass_model, normalization)
+    _set_start(t_start)
     _seed(seed)
     return simr_interface.run_collision(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
@@ -78,6 +86,7 @@ def initial_state(
     heat_mode: str = "wallin",
     mass_model: dict[str, float] | None = None,
     normalization: str = "wallin",
+    t_start: float | None = None,
 ) -> np.ndarray:
     """Set up one collision and return every particle at the start, before any step.
 
@@ -90,6 +99,7 @@ def initial_state(
     """
     params = _check_params(params)
     _set_mass_model(mass_model, normalization)
+    _set_start(t_start)
     _seed(seed)
     return simr_interface.initial_state(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
@@ -99,11 +109,13 @@ def timing(
     potential: int = EXTENDED,
     mass_model: dict[str, float] | None = None,
     normalization: str = "wallin",
+    t_start: float | None = None,
 ) -> dict[str, float | int | bool]:
     """When a run starts, how many steps it takes, and what the start-time search found.
 
     Only the two galaxy centers are set up; nothing is stepped, so this is fast. Takes the same
-    physics arguments as `run_collision` (no particles or seed are needed).
+    physics arguments as `run_collision` (no particles or seed are needed). With `t_start` given, the
+    search doesn't run: "t_start" is that value, and the search's values are 0.
 
     Returns:
         "t_start": the start time a run uses (SPAM time units, now = 0).
@@ -116,9 +128,10 @@ def timing(
     """
     params = _check_params(params)
     _set_mass_model(mass_model, normalization)
-    t_start, n_steps, fallback, search = simr_interface.get_timing(params, potential)
+    _set_start(t_start)
+    start, n_steps, fallback, search = simr_interface.get_timing(params, potential)
     return {
-        "t_start": float(t_start),
+        "t_start": float(start),
         "n_steps": int(n_steps),
         "start_fallback": bool(fallback),
         "t_start_found": float(search[0]),
@@ -134,11 +147,12 @@ def run_orbit(
     potential: int = EXTENDED,
     mass_model: dict[str, float] | None = None,
     normalization: str = "wallin",
+    t_start: float | None = None,
 ) -> np.ndarray:
     """The secondary galaxy's center at every step of a run, with no particles.
 
     Args:
-        params, potential, mass_model, normalization: as in `run_collision`.
+        params, potential, mass_model, normalization, t_start: as in `run_collision`.
         n_steps: how many steps to take from the start. None takes a full run's (`timing`'s n_steps),
             so the last row is where `run_collision` leaves the secondary's center.
 
@@ -147,9 +161,32 @@ def run_orbit(
     """
     params = _check_params(params)
     if n_steps is None:
-        n_steps = timing(params, potential, mass_model, normalization)["n_steps"]
+        n_steps = timing(params, potential, mass_model, normalization, t_start)["n_steps"]
     _set_mass_model(mass_model, normalization)
+    _set_start(t_start)
     return simr_interface.run_orbit(params, potential, n_steps)
+
+
+def search_orbit(
+    params: np.ndarray,
+    potential: int = EXTENDED,
+    mass_model: dict[str, float] | None = None,
+    normalization: str = "wallin",
+) -> np.ndarray:
+    """The path SPAM's start-time search integrates: the secondary's center from now back to -30.
+
+    The two centers are run backward from the model's position now, one step (0.001) at a time, to
+    `-SEARCH_WINDOW`. A run is placed by stepping back along this same path, so its start lies on it.
+
+    Returns:
+        x, y, z, vx, vy, vz, t, one row per step from t = 0 back to -30, shape (about 30001, 7).
+        Velocities are as in forward time.
+    """
+    params = _check_params(params)
+    _set_mass_model(mass_model, normalization)
+    nmax = int(SEARCH_WINDOW / STEP) + 3
+    path, nrows = simr_interface.search_orbit(params, potential, nmax)
+    return path[:nrows].copy()
 
 
 def mass_profile(mass_model: dict[str, float] | None = None, normalization: str = "wallin") -> dict[str, np.ndarray]:
@@ -194,6 +231,16 @@ def _set_mass_model(mass_model: dict[str, float] | None, normalization: str) -> 
     # The Fortran takes them by position, in MASS_MODEL_DEFAULTS' order
     ordered = np.array([values[name] for name in MASS_MODEL_DEFAULTS], dtype=float)
     simr_interface.set_mass_model(ordered, NORMALIZATIONS[normalization])
+
+
+def _set_start(t_start: float | None) -> None:
+    """Set the start time in the Fortran, or clear it. Called before every run, so it can't leak."""
+    if t_start is None:
+        simr_interface.set_start_time(0.0, 0)
+    else:
+        if not t_start < 0:
+            raise ValueError(f"t_start must be before now (negative): {t_start!r}")
+        simr_interface.set_start_time(float(t_start), 1)
 
 
 def _seed(seed: int | None) -> None:

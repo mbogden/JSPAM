@@ -1023,9 +1023,18 @@ end subroutine perturber_position
       distOld = 2.0*distNew
     	
       distNearApp = -1e30
-   
+
+      ! SIMR: keep the backward path (rv's velocities are reversed here, so flip them back)
+      if (allocated(search_path)) deallocate(search_path)
+      allocate(search_path(int(-tmin / h) + 3, 7))
+      search_path_rows = 0
+
       ! keep looping as long as distance is decreasing
-      do while(tmin < t) 
+      do while(tmin < t)
+        search_path_rows = search_path_rows + 1   ! SIMR
+        search_path(search_path_rows, 1:3) = rv(1:3)
+        search_path(search_path_rows, 4:6) = -rv(4:6)
+        search_path(search_path_rows, 7) = t
         r = (/rv(1), rv(2), rv(3)/)
         v = (/rv(4), rv(5), rv(6)/)
         coe = rvToCoe(r,v,mu)
@@ -1052,6 +1061,10 @@ end subroutine perturber_position
         rv(7) = xxe(7) - h * 2.0d0
         t = t - h
       enddo
+      search_path_rows = search_path_rows + 1   ! SIMR: the last point
+      search_path(search_path_rows, 1:3) = rv(1:3)
+      search_path(search_path_rows, 4:6) = -rv(4:6)
+      search_path(search_path_rows, 7) = t
 
       rv(1:7) = rvmin(1:7)
     	

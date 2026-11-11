@@ -108,6 +108,36 @@ contains
 
   end subroutine initial_state
 
+  ! Start every run after this at t_start (use = 1), or let SPAM's search choose (use = 0, the original).
+  subroutine set_start_time(t_start, use)
+    real (kind=8), intent(in) :: t_start
+    integer, intent(in) :: use
+    start_override = t_start
+    use_start_override = (use == 1)
+  end subroutine set_start_time
+
+  ! The path SPAM's start-time search integrates: the secondary's center from now (t = 0) back to t = -30,
+  ! one row per step (x, y, z, vx, vy, vz, t). Rows past nrows are unused. Ignores set_start_time.
+  subroutine search_orbit(collision_param, potential, nmax, path, nrows)
+
+    real (kind=8), dimension(22), intent(in) :: collision_param
+    integer, intent(in) :: potential, nmax
+    real (kind=8), dimension(nmax,7), intent(out) :: path
+    integer, intent(out) :: nrows
+
+    logical :: saved_use
+
+    saved_use = use_start_override
+    use_start_override = .false.
+    call setup_run(collision_param, potential, 0, 0, 0.0d0, 0.0d0, 0)
+    use_start_override = saved_use
+    nrows = min(search_path_rows, nmax)
+    path = 0.0d0
+    path(1:nrows,:) = search_path(1:nrows,:)
+    call end_run
+
+  end subroutine search_orbit
+
   ! When a run starts and how many steps it takes, plus what the start-time search found. Only the two
   ! centers are set up (no particles), and nothing is stepped.
   ! search: getTStart's start time (before the -12 and near-0 overrides), the closest approach's distance,
@@ -199,6 +229,13 @@ contains
     tend = 0
     time = -5
     tIsSet = .false.
+    tstart_search = 0.0d0
+    tstart_fallback = .false.
+    if (use_start_override) then   ! start at a given time instead of searching for one
+      tstart = start_override
+      time = start_override
+      tIsSet = .true.
+    end if
 
     n1 = npts1
     n2 = npts2

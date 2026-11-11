@@ -43,6 +43,13 @@ module parameters_module
     ! tstart_fallback is true when an override replaced that start with -5.
     real (kind=8), dimension(4) :: tstart_search = 0.0d0
     logical :: tstart_fallback = .false.
+    ! SIMR: getTStart's backward path of the secondary's center, one row per step from now (t = 0) to
+    ! the window's edge: x, y, z, vx, vy, vz, t, with velocities as in forward time.
+    real (kind=8), dimension(:,:), allocatable :: search_path
+    integer (kind=4) :: search_path_rows = 0
+    ! SIMR: when use_start_override is true, a run starts at start_override and getTStart isn't called.
+    real (kind=8) :: start_override = -5.0d0
+    logical :: use_start_override = .false.
 
     integer, parameter :: ndim = 3
     real (kind=8) :: mass1 
