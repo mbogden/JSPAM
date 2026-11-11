@@ -274,3 +274,20 @@ def test_start_time_does_not_leak_into_the_next_run():
 def test_rejects_a_start_after_now():
     with pytest.raises(ValueError):
         jspam.timing(PARAMS, t_start=0.5)
+
+
+def test_initial_state_at_now_is_unperturbed():
+    start = jspam.initial_state(PARAMS, n1=50, n2=50, seed=3)
+    now = jspam.initial_state(PARAMS, n1=50, n2=50, seed=3, t_start=0.0)
+    # The secondary sits where the parameters put it, with no steps back
+    np.testing.assert_array_equal(now[-1], PARAMS[:6])
+    np.testing.assert_array_equal(now[:50], start[:50])  # the primary's disk is the same
+    # The secondary's disk is the same draw, moved with its center
+    np.testing.assert_allclose(now[50:100] - now[-1], start[50:100] - start[-1], rtol=1e-12, atol=1e-12)
+
+
+def test_only_initial_state_accepts_a_start_of_now():
+    with pytest.raises(ValueError):
+        jspam.run_collision(PARAMS, n1=5, n2=5, seed=1, t_start=0.0)
+    with pytest.raises(ValueError):
+        jspam.initial_state(PARAMS, n1=5, n2=5, seed=1, t_start=0.5)

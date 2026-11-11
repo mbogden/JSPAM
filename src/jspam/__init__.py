@@ -91,7 +91,8 @@ def initial_state(
     """Set up one collision and return every particle at the start, before any step.
 
     Takes the same arguments as `run_collision`. With the same seed, this is exactly the state
-    `run_collision` starts stepping from.
+    `run_collision` starts stepping from. `t_start=0` (allowed here only) places the same disks at the
+    galaxies' current positions without any steps: the unperturbed galaxies.
 
     Returns:
         x, y, z, vx, vy, vz at the start time, shape (n1 + n2 + 1, 6). The last row is the
@@ -99,7 +100,7 @@ def initial_state(
     """
     params = _check_params(params)
     _set_mass_model(mass_model, normalization)
-    _set_start(t_start)
+    _set_start(t_start, allow_now=True)
     _seed(seed)
     return simr_interface.initial_state(params, potential, n1, n2, heat1, heat2, _heat_mode(heat_mode))
 
@@ -233,13 +234,17 @@ def _set_mass_model(mass_model: dict[str, float] | None, normalization: str) -> 
     simr_interface.set_mass_model(ordered, NORMALIZATIONS[normalization])
 
 
-def _set_start(t_start: float | None) -> None:
-    """Set the start time in the Fortran, or clear it. Called before every run, so it can't leak."""
+def _set_start(t_start: float | None, allow_now: bool = False) -> None:
+    """Set the start time in the Fortran, or clear it. Called before every run, so it can't leak.
+
+    allow_now: accept t_start = 0 (only `initial_state`; a run starting now would take no real steps).
+    """
     if t_start is None:
         simr_interface.set_start_time(0.0, 0)
     else:
-        if not t_start < 0:
-            raise ValueError(f"t_start must be before now (negative): {t_start!r}")
+        if not (t_start <= 0 if allow_now else t_start < 0):
+            before = "now or before (0 or negative)" if allow_now else "before now (negative)"
+            raise ValueError(f"t_start must be {before}: {t_start!r}")
         simr_interface.set_start_time(float(t_start), 1)
 
 

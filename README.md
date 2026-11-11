@@ -73,6 +73,8 @@ galaxy's center at every step (x, y, z, vx, vy, vz, t), with no particles; its l
 `run_collision` leaves the secondary.
 `jspam.search_orbit(params)` returns the path the start-time search integrates, from now back to
 t = -30. Every run function takes `t_start` to start at a given time instead of SPAM's choice.
+`jspam.initial_state(params, t_start=0)` gives the unperturbed galaxies: the same disks a run starts
+with (same seed), placed at the galaxies' current positions without any steps.
 
 ## Tests
 ```bash
